@@ -1,7 +1,12 @@
 package com.imooc.service.impl;
 
+import cn.hutool.core.bean.BeanUtil;
+import com.imooc.bo.UpdatedUserBO;
 import com.imooc.enums.Sex;
+import com.imooc.enums.UserInfoModifyType;
 import com.imooc.enums.YesOrNo;
+import com.imooc.exceptions.GraceException;
+import com.imooc.grace.result.ResponseStatusEnum;
 import com.imooc.mapper.UsersMapper;
 import com.imooc.pojo.Users;
 import com.imooc.service.UserService;
@@ -67,5 +72,52 @@ public class UserServiceImpl implements UserService {
         usersMapper.insert(user);
 
         return user;
+    }
+
+    @Override
+    public Users getUser(String userId) {
+        return usersMapper.selectByPrimaryKey(userId);
+    }
+
+    @Override
+    public Users updateUserInfo(UpdatedUserBO updatedUserBO) {
+        Users users = new Users();
+        BeanUtil.copyProperties(updatedUserBO, users);
+        int update = usersMapper.updateByPrimaryKeySelective(users);
+        if (update != 1) {
+            GraceException.display(ResponseStatusEnum.USER_UPDATE_ERROR);
+        }
+
+        return getUser(updatedUserBO.getId());
+    }
+
+    @Override
+    public Users updateUserInfo(UpdatedUserBO updatedUserBO, Integer type) {
+        Example example = new Example(Users.class);
+        Example.Criteria criteria = example.createCriteria();
+        if (type == UserInfoModifyType.NICKNAME.type) {
+            criteria.andEqualTo("nickname", updatedUserBO.getNickname());
+            Users user = usersMapper.selectOneByExample(example);
+            if (user != null) {
+                GraceException.display(ResponseStatusEnum.USER_INFO_UPDATED_NICKNAME_EXIST_ERROR);
+            }
+        }
+
+        if (type == UserInfoModifyType.IMOOCNUM.type) {
+            criteria.andEqualTo("imoocNum", updatedUserBO.getImoocNum());
+            Users user = usersMapper.selectOneByExample(example);
+            if (user != null) {
+                GraceException.display(ResponseStatusEnum.USER_INFO_UPDATED_NICKNAME_EXIST_ERROR);
+            }
+
+            Users tempUser =  getUser(updatedUserBO.getId());
+            if (tempUser.getCanImoocNumBeUpdated() == YesOrNo.NO.type) {
+                GraceException.display(ResponseStatusEnum.USER_INFO_CANT_UPDATED_IMOOCNUM_ERROR);
+            }
+
+            updatedUserBO.setCanImoocNumBeUpdated(YesOrNo.NO.type);
+        }
+
+        return updateUserInfo(updatedUserBO);
     }
 }

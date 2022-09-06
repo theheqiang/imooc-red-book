@@ -1,5 +1,6 @@
 package com.imooc.controller;
 
+import cn.hutool.core.lang.UUID;
 import cn.hutool.core.util.ObjectUtil;
 import com.imooc.base.BaseInfoProperties;
 import com.imooc.bo.RegistLoginBO;
@@ -11,10 +12,12 @@ import com.imooc.utils.IPUtil;
 
 import com.imooc.utils.SMSUtils;
 
+import com.imooc.vo.UsersVO;
 import io.swagger.annotations.Api;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 
+import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
 
@@ -24,7 +27,7 @@ import javax.validation.Valid;
 
 @Slf4j
 @Api(tags = "PassportController 通信证接口模块")
-@RequestMapping("passport")
+@RequestMapping("/passport")
 @RestController
 public class PassportController extends BaseInfoProperties {
 
@@ -34,7 +37,7 @@ public class PassportController extends BaseInfoProperties {
     @Autowired
     private UserService userService;
 
-    @PostMapping("getSMSCode")
+    @PostMapping("/getSMSCode")
     public GraceJSONResult getSMSCode(@RequestParam String mobile,
                                       HttpServletRequest request) throws Exception {
 
@@ -58,7 +61,7 @@ public class PassportController extends BaseInfoProperties {
         return GraceJSONResult.ok();
     }
 
-    @PostMapping("login")
+    @PostMapping("/login")
     public GraceJSONResult login(@Valid @RequestBody RegistLoginBO registLoginBO,
                                  HttpServletRequest request) throws Exception {
 
@@ -78,14 +81,28 @@ public class PassportController extends BaseInfoProperties {
             user = userService.createUser(mobile);
         }
 
+        // 3. 如果不为空，可以继续下方业务，可以保存用户会话信息
+        String uToken = UUID.randomUUID().toString();
+        redis.set(REDIS_USER_TOKEN + ":" + user.getId(), uToken);
 
-        // 业务逻辑完成后, 删除验证码
+        // 4. 业务逻辑完成后, 删除验证码
         redis.del(MOBILE_SMSCODE + ":" + mobile);
+
+        // 5. 返回用户信息，包含token令牌
+        UsersVO usersVO = new UsersVO();
+        BeanUtils.copyProperties(user, usersVO);
+        usersVO.setUserToken(uToken);
+
+        return GraceJSONResult.ok(usersVO);
+    }
+
+    @PostMapping("/logout")
+    public GraceJSONResult logout(@RequestParam String userId,
+                                  HttpServletRequest request) throws Exception {
+        //TODO 应该将userId与当前登录用户作比较, 一致则删除缓存, 否则抛异常
+        redis.del(REDIS_USER_TOKEN + ":" + userId);
 
         return GraceJSONResult.ok();
     }
-
-
-
 
 }
